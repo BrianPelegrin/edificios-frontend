@@ -193,6 +193,13 @@ const deleteLocalidad = async (item: IProject) => {
                 </td>
                 <td>
                   <div class="d-flex justify-content-center gap-2">
+                    <a
+                      class="btn btn-sm btn-primary"                      
+                      title="Visualizar en RD"
+                      :href="`/building_units_complete.html?code=${item.id}`"
+                    >
+                      <i class="bi bi-boxes"></i>
+                    </a>
                     <button
                       class="btn btn-sm btn-info"
                       @click="viewApartments(item)"
