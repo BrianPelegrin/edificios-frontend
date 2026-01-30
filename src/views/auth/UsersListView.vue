@@ -41,8 +41,12 @@
       </div>
     </div>
 
+        <div v-if="isLoading">
+      <LoadingSpinner label="Cargando.." :size="50" :label-size="24" />    
+    </div>
+
     <!-- Tabla de usuarios -->
-    <div class="card shadow-none border">
+    <div v-else class="card shadow-none border">
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-hover mb-0">
@@ -81,7 +85,7 @@
                     </button> -->
                     <button
                       class="btn  btn-primary"
-                      @click="editUser(user)"
+                      @click="$router.push({ name: 'users-form-edit', params: { id: user.id } })"
                       title="Editar"
                     >
                       <i class="bi bi-pencil"></i>
@@ -101,31 +105,6 @@
         </div>
       </div>
 
-      <!-- Paginación -->
-      <div class="card-footer  d-flex justify-content-between align-items-center">
-        <div class="text-muted">
-          Mostrando {{ filteredUsers.length }} de {{ users.length }} usuarios
-        </div>
-        <nav>
-          <ul class="pagination mb-0">
-            <li class="page-item disabled">
-              <a class="page-link" href="#">Anterior</a>
-            </li>
-            <li class="page-item active">
-              <a class="page-link" href="#">1</a>
-            </li>
-            <li class="page-item">
-              <a class="page-link" href="#">2</a>
-            </li>
-            <li class="page-item">
-              <a class="page-link" href="#">3</a>
-            </li>
-            <li class="page-item">
-              <a class="page-link" href="#">Siguiente</a>
-            </li>
-          </ul>
-        </nav>
-      </div>
     </div>
 
   </div>
@@ -135,62 +114,36 @@
 import { ref, computed, onMounted } from 'vue'
 import buildingsApi from '../../apis/buildings-api'
 import type { IUser } from '../../interfaces/auth'
+import LoadingSpinner from '../../components/LoadingSpinner.vue'
 
 const searchQuery = ref('')
 const filterRole = ref('')
 const filterStatus = ref('')
+const isLoading = ref<boolean>(false)
 const userList = ref<IUser[]>([])
 
 onMounted(async ()=>{
 
-   const response = await buildingsApi.get<IUser[]>('/api/users')
-   userList.value = response.data
-})
+  try { 
 
-const users = ref([
-  {
-    id: 1,
-    name: 'Carlos Rodríguez',
-    username: '@crodriguez',
-    email: 'carlos.rodriguez@email.com',
-    role: 'Admin',
-    status: 'Activo',
-    registrationDate: '15/01/2024',
-  },
-  {
-    id: 2,
-    name: 'María González',
-    username: '@mgonzalez',
-    email: 'maria.gonzalez@email.com',    
-    status: 'Activo',
-    registrationDate: '20/01/2024',
-  },
-  {
-    id: 3,
-    name: 'Juan Martínez',
-    username: '@jmartinez',
-    email: 'juan.martinez@email.com',
-    role: 'Moderador',
-    status: 'Activo',
-    registrationDate: '10/02/2024',
-  },
-  {
-    id: 4,
-    name: 'Ana Pérez',
-    username: '@aperez',
-    email: 'ana.perez@email.com',    
-    status: 'Inactivo',
-    registrationDate: '05/03/2024',
-  },
-  {
-    id: 5,
-    name: 'Luis Fernández',
-    username: '@lfernandez',
-    email: 'luis.fernandez@email.com',    
-    status: 'Activo',
-    registrationDate: '12/03/2024',
+    isLoading.value = true;
+    const response = await buildingsApi.get<IUser[]>('/api/users');
+    userList.value = response.data;
+
+  } catch (error) {
+
+    console.error(error);
+
+  }finally{
+
+    setTimeout(() => {
+      
+      isLoading.value = false;
+    }, 500);
+
   }
-])
+
+})
 
 const filteredUsers = computed<IUser[]>(
   () => (
@@ -206,17 +159,9 @@ const resetFilters = () => {
   filterStatus.value = ''
 }
 
-const viewUser = (user: IUser) => {
-  alert(`Ver detalles de: ${user.nombre}`)
-}
-
-const editUser = (user: IUser) => {
-  alert(`Editar usuario: ${user.nombre}`)
-}
-
 const deleteUser = (user: IUser) => {
   if (confirm(`¿Eliminar a ${user.nombre}?`)) {
-    users.value = users.value.filter(u => u.id !== user.id)
+    userList.value = userList.value.filter(u => u.id !== user.id)
   }
 }
 </script>

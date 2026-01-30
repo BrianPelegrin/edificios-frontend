@@ -14,7 +14,7 @@
       </ul>
 
       <ul>
-        <li>
+        <!-- <li>
           <router-link
             to="/projects-map"
             class="nav-link-item"
@@ -22,7 +22,7 @@
           >
             <i class="bi bi-buildings"></i>
           </router-link>
-        </li>
+        </li> -->
 
         <li>
           <router-link
@@ -30,7 +30,7 @@
             class="nav-link-item"
             @click="closeSidebar"
           >
-            <i class="bi bi-card-list"></i>
+            <i class="bi bi-buildings"></i>
           </router-link>
         </li>
 
