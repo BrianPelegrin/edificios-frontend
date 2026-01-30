@@ -69,6 +69,11 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('../views/auth/UserFormView.vue')
             },
             {
+                path: 'users-form/:id',
+                name:'users-form-edit',
+                component: () => import('../views/auth/UserFormView.vue')
+            },
+            {
                 path:'',
                 redirect:'/projects'
             }

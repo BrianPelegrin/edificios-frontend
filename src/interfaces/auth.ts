@@ -7,8 +7,8 @@ interface IUser{
     id:number;
     codigo: string;
     nombre:string;
-    email?:string;
-    clave?:string;
+    email:string;
+    clave:string;
 }
 
 interface ILoginResponse {

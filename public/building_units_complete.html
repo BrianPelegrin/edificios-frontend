@@ -739,16 +739,16 @@
     let apartmentsByCod = new Map();
     let apartmentsByEdificioUnidad = new Map();
 
-  const API = {
-    baseUrl: 'http://localhost:5153',
-    endpoint: '/api/Apartamentos/GetBySheet',
-    projectsEndpoint: '/api/Projects'
-  };
+    const API = {
+      baseUrl: 'http://localhost:5153',
+      endpoint: '/api/Apartamentos/GetBySheet',
+      projectsEndpoint: '/api/Projects'
+    };
 
-  // ===== Proyecto (GLOBAL) =====
-let currentProjectId = null;   // Ej: "NT8"
-let currentProject = null;     // Objeto completo devuelto por /api/Projects/{id}
-let currentFloorPlanDataUrl = ''; // La última imagen/PDF convertida a imagen (dataURL)
+    // ===== Proyecto (GLOBAL) =====
+    let currentProjectId = null;   // Ej: "NT8"
+    let currentProject = null;     // Objeto completo devuelto por /api/Projects/{id}
+    let currentFloorPlanDataUrl = ''; // La última imagen/PDF convertida a imagen (dataURL)
 
 
 
@@ -886,7 +886,6 @@ let currentFloorPlanDataUrl = ''; // La última imagen/PDF convertida a imagen (
 
     function loadQueryParams() {
 
-      const code = getQueryParam('code')
       const estado = getQueryParam('estado')
       const edificio = getQueryParam('edificio')
       const entregada = getQueryParam('entregada')
@@ -894,25 +893,26 @@ let currentFloorPlanDataUrl = ''; // La última imagen/PDF convertida a imagen (
       const search = getQueryParam('search')
 
 
-      if (edificio) {
+      if (edificio != null) {
         filterControls.edificio.value = edificio;
       }
 
-      if (estado) {
+      if (estado != null) {
         filterControls.estado.value = estado;
       }
 
-      if (search) {
+      if (search != null) {
         filterControls.search.value = search;
       }
 
-      if (entregada.length > 0) {
+      if (entregada != null && entregada.length > 0) {
         filterControls.entregada.checked = Boolean(entregada);
       }
 
-      if (saldo.length > 0) {
+      if (saldo != null && saldo.length > 0) {
         filterControls.saldo.checked = saldo.toLowerCase() != 'pendiente';
       }
+
     }
 
     //CARGAR EDIFICIOS DE LA API
@@ -1069,70 +1069,70 @@ let currentFloorPlanDataUrl = ''; // La última imagen/PDF convertida a imagen (
       return updated;
     }
 
-    function setProjectImagenPlano(dataUrl){
-  currentFloorPlanDataUrl = dataUrl || '';
-  if (currentProject){
-    currentProject.imagenPlano = currentFloorPlanDataUrl;
-  }
-}
+    function setProjectImagenPlano(dataUrl) {
+      currentFloorPlanDataUrl = dataUrl || '';
+      if (currentProject) {
+        currentProject.imagenPlano = currentFloorPlanDataUrl;
+      }
+    }
 
-function loadTextureFromUrl(url){
-  return new Promise((resolve, reject) => {
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (tex) => {
-        tex.generateMipmaps = true;
-        tex.minFilter = THREE.LinearMipmapLinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        if (renderer && renderer.capabilities) {
-          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    function loadTextureFromUrl(url) {
+      return new Promise((resolve, reject) => {
+        const loader = new THREE.TextureLoader();
+        loader.load(
+          url,
+          (tex) => {
+            tex.generateMipmaps = true;
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            if (renderer && renderer.capabilities) {
+              tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            }
+            tex.needsUpdate = true;
+            resolve(tex);
+          },
+          undefined,
+          (err) => reject(err)
+        );
+      });
+    }
+
+    async function setFloorPlanFromImagenPlano(imagenPlano) {
+      if (!imagenPlano) return;
+      try {
+        const tex = await loadTextureFromUrl(imagenPlano);
+        createFloorPlanMesh(tex);
+        const status = document.getElementById('file-status');
+        if (status) status.textContent = 'Plano cargado desde el proyecto';
+      } catch (err) {
+        console.warn('No se pudo cargar imagenPlano del proyecto:', err);
+      }
+    }
+
+    async function loadProjectToGlobal() {
+      const id = getQueryParam('code'); // en tu app ya usas ?code=... para el proyecto:contentReference[oaicite:7]{index=7}
+      if (!id) return;
+
+      currentProjectId = id;
+
+      try {
+        const res = await fetch(`${API.baseUrl}${API.projectsEndpoint}/${encodeURIComponent(id)}`, { cache: 'no-store' });
+        if (!res.ok) {
+          console.warn('No se pudo cargar el proyecto:', res.status);
+          return;
         }
-        tex.needsUpdate = true;
-        resolve(tex);
-      },
-      undefined,
-      (err) => reject(err)
-    );
-  });
-}
 
-async function setFloorPlanFromImagenPlano(imagenPlano){
-  if (!imagenPlano) return;
-  try{
-    const tex = await loadTextureFromUrl(imagenPlano);
-    createFloorPlanMesh(tex);
-    const status = document.getElementById('file-status');
-    if (status) status.textContent = 'Plano cargado desde el proyecto';
-  } catch (err){
-    console.warn('No se pudo cargar imagenPlano del proyecto:', err);
-  }
-}
+        currentProject = await res.json();
 
-async function loadProjectToGlobal(){
-  const id = getQueryParam('code'); // en tu app ya usas ?code=... para el proyecto:contentReference[oaicite:7]{index=7}
-  if (!id) return;
-
-  currentProjectId = id;
-
-  try{
-    const res = await fetch(`${API.baseUrl}${API.projectsEndpoint}/${encodeURIComponent(id)}`, { cache: 'no-store' });
-    if (!res.ok){
-      console.warn('No se pudo cargar el proyecto:', res.status);
-      return;
+        // Si el proyecto trae imagenPlano, muéstrala de una vez en el 3D
+        if (currentProject && currentProject.imagenPlano) {
+          setProjectImagenPlano(currentProject.imagenPlano);
+          await setFloorPlanFromImagenPlano(currentProject.imagenPlano);
+        }
+      } catch (err) {
+        console.warn('Error cargando proyecto /api/Projects/{id}:', err);
+      }
     }
-
-    currentProject = await res.json();
-
-    // Si el proyecto trae imagenPlano, muéstrala de una vez en el 3D
-    if (currentProject && currentProject.imagenPlano){
-      setProjectImagenPlano(currentProject.imagenPlano);
-      await setFloorPlanFromImagenPlano(currentProject.imagenPlano);
-    }
-  } catch(err){
-    console.warn('Error cargando proyecto /api/Projects/{id}:', err);
-  }
-}
 
 
 
@@ -2179,44 +2179,44 @@ async function loadProjectToGlobal(){
       }
     }
 
-async function handleFileUpload(e){
-  const file = e.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('file-status');
+    async function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const status = document.getElementById('file-status');
 
-  try{
-    if (file.type === 'application/pdf'){
-      status.textContent = `Rendering PDF: ${file.name}.`;
-      const arrayBuf = await file.arrayBuffer();
-      await renderPdfToTexture(arrayBuf); // renderPdfToTexture ahora también guardará dataURL (ver paso 6)
-      status.textContent = `Loaded PDF: ${file.name}`;
-    } else if (file.type.startsWith('image/')){
-      const reader = new FileReader();
-      reader.onload = function(ev){
-        const dataUrl = ev.target.result; // dataURL base64
-        setProjectImagenPlano(dataUrl);   // <-- NUEVO: guarda en global + currentProject.imagenPlano
+      try {
+        if (file.type === 'application/pdf') {
+          status.textContent = `Rendering PDF: ${file.name}.`;
+          const arrayBuf = await file.arrayBuffer();
+          await renderPdfToTexture(arrayBuf); // renderPdfToTexture ahora también guardará dataURL (ver paso 6)
+          status.textContent = `Loaded PDF: ${file.name}`;
+        } else if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = function (ev) {
+            const dataUrl = ev.target.result; // dataURL base64
+            setProjectImagenPlano(dataUrl);   // <-- NUEVO: guarda en global + currentProject.imagenPlano
 
-        const loader = new THREE.TextureLoader();
-        loader.load(dataUrl, (tex)=> {
-          tex.generateMipmaps = true;
-          tex.minFilter = THREE.LinearMipmapLinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          if (renderer && renderer.capabilities) {
-            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-          }
-          tex.needsUpdate = true;
-          createFloorPlanMesh(tex);
-          status.textContent = `Loaded image: ${file.name}`;
-        });
-      };
-      reader.readAsDataURL(file);
-    } else {
-      status.textContent = 'Unsupported file type.';
+            const loader = new THREE.TextureLoader();
+            loader.load(dataUrl, (tex) => {
+              tex.generateMipmaps = true;
+              tex.minFilter = THREE.LinearMipmapLinearFilter;
+              tex.magFilter = THREE.LinearFilter;
+              if (renderer && renderer.capabilities) {
+                tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+              }
+              tex.needsUpdate = true;
+              createFloorPlanMesh(tex);
+              status.textContent = `Loaded image: ${file.name}`;
+            });
+          };
+          reader.readAsDataURL(file);
+        } else {
+          status.textContent = 'Unsupported file type.';
+        }
+      } catch (err) {
+        status.textContent = 'Error loading file: ' + (err && err.message ? err.message : err);
+      }
     }
-  } catch(err){
-    status.textContent = 'Error loading file: ' + (err && err.message ? err.message : err);
-  }
-}
 
     async function renderPdfToTexture(arrayBuffer) {
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -2973,11 +2973,11 @@ async function handleFileUpload(e){
         y: truncateTo(Number(b?.group?.position?.y ?? 0)),
         z: truncateTo(Number(b?.group?.position?.z ?? 0)),
 
-        rotation: truncateTo( Number(b?.group?.rotation?.y ?? 0) ),
-        color: truncateTo( Number(b?.color ?? 0) ),
+        rotation: truncateTo(Number(b?.group?.rotation?.y ?? 0)),
+        color: truncateTo(Number(b?.color ?? 0)),
 
-        footprintScale: truncateTo( Number(b?.footprintScale ?? 1) ),
-        cubeScale: truncateTo( Number(b?.cubeScale ?? 1) ),
+        footprintScale: truncateTo(Number(b?.footprintScale ?? 1)),
+        cubeScale: truncateTo(Number(b?.cubeScale ?? 1)),
 
         imagenPlano,
         //project
@@ -2995,8 +2995,8 @@ async function handleFileUpload(e){
 
       // 3) Si hay plano cargado, primero actualiza el proyecto (PUT)
 
-      console.log('Id del Proyecto: ',code)
-      console.log('Plano: ',plano)
+      console.log('Id del Proyecto: ', code)
+      console.log('Plano: ', plano)
       if (plano) {
         await putProjectFloorPlanToApi(plano);
       }
