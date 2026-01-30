@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Advanced 3D Floor Plan Unit Mapper</title>
+  <style>
+    body{margin:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#667eea 0%, #764ba2 100%);overflow:hidden}
+    #container{display:flex;height:100vh}
+    #canvas-container{flex:1;position:relative; min-width: 0;}
+    #controls{width:430px;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);padding:20px;overflow-y:auto;box-shadow:-5px 0 20px rgba(0,0,0,.1); flex-shrink: 0;}
+    h2,h3{margin-top:0;color:#333;border-bottom:2px solid #667eea;padding-bottom:10px}
+    .section{margin-bottom:20px;padding:15px;background:#f8f9fa;border-radius:8px;border:1px solid #e0e0e0}
+    .building-config{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+    .config-item{display:flex;flex-direction:column}
+    .config-item label{font-size:11px;color:#666;margin-bottom:3px}
+    .config-item input,.config-item select{padding:5px;border:1px solid #ddd;border-radius:4px;font-size:12px}
+    .building-section{margin-bottom:15px;padding:10px;background:#fff;border-radius:6px}
+    .building-title{font-weight:bold;color:#444;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+    .unit-grid{display:grid;gap:5px;margin-top:10px}
+    .unit-input{display:flex;align-items:center;padding:3px;background:#f5f5f5;border-radius:3px;gap:6px}
+    .unit-input label{font-size:10px;color:#666;margin-right:5px;min-width:45px}
+    .unit-input input{flex:1;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:11px}
+    .key-pill{font-size:10px;background:#eef;border:1px solid #cdd;color:#334;padding:2px 6px;border-radius:10px;white-space:nowrap}
+    button{background:#667eea;color:#fff;border:none;padding:8px 15px;border-radius:6px;cursor:pointer;margin:5px;transition:all .3s ease;font-size:13px}
+    button:hover:not(:disabled){background:#5a67d8;transform:translateY(-2px)}
+    button:disabled{background:#ccc;cursor:not-allowed}
+    .button-group{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+    #info{position:absolute;top:20px;left:20px;color:#fff;background:rgba(0,0,0,.7);padding:15px;border-radius:8px;font-size:12px;max-width:260px}
+    .color-indicator{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px}
+    #file-input-section{background:#fff3cd;border:2px dashed #ffc107;padding:15px;border-radius:8px;text-align:center;margin-bottom:15px}
+    #file-input{display:none}
+    .file-label{cursor:pointer;color:#856404;font-weight:bold}
+    .mode-toggle{display:flex;gap:10px;margin-bottom:10px}
+    .mode-button{flex:1;padding:8px;border:2px solid #667eea;background:#fff;color:#667eea;border-radius:6px;cursor:pointer;transition:all .3s}
+    .mode-button.active{background:#667eea;color:#fff}
+    .position-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:10px}
+    .position-controls button{padding:6px;font-size:12px}
+    .fine-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+    .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+    .mini{display:flex;align-items:center;gap:6px}
+    .mini label{font-size:11px;color:#666;min-width:70px}
+    input[type="number"]{width:100%}
+    input[type="range"]{width:100%}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:9999}
+    .modal{background:#fff;border-radius:10px;max-width:900px;width:90%;max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+    .modal header{padding:16px 20px;border-bottom:1px solid #eee;font-weight:600}
+    .modal .content{padding:10px 16px 16px}
+    .layout-table{width:100%;border-collapse:collapse}
+    .layout-table th,.layout-table td{border-bottom:1px solid #f0f0f0;padding:8px;text-align:left;font-size:13px}
+    .layout-table th{position:sticky;top:0;background:#fafafa;z-index:1}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid #ddd;background:#f7f7f7}
+    .coverage-ok{color:#2563eb}
+    .coverage-bad{color:#b91c1c;font-weight:600}
+    .modal footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #eee;position:sticky;bottom:0;background:#fff}
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+      <div id="info">
+        <strong>3D Building Unit Mapper</strong><br/>
+        <div style="margin-top:10px;"><strong>Mode: <span id="current-mode">VIEW</span></strong></div>
+        <div style="margin-top:10px;">
+          <strong>View Controls:</strong><br/>
+          • Click & drag to rotate (Isometric)<br/>
+          • Drag to pan (Top-down)<br/>
+          • Scroll to zoom<br/>
+          • Right-click to pan (Isometric)
+        </div>
+        <div style="margin-top:10px;display:none" id="edit-info">
+          <strong>Edit Mode:</strong><br/>
+          • Click a building to select<br/>
+          • <strong>Drag selected building to move</strong><br/>
+          • Arrow keys to move (Shift = coarse)<br/>
+          • R to rotate (Shift = coarse)<br/>
+          • Delete to remove
+        </div>
+      </div>
+    </div>
+    <div id="controls">
+      <h2>Floor Plan Configuration</h2>
+
+      <div class="section" style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center">
+        <label style="font-size:12px;color:#333;white-space:nowrap;">Building color:</label>
+        <input id="global-color" type="color" value="#4a90e2" style="height:36px;border:1px solid #ddd;border-radius:6px;"/>
+      </div>
+
+      <!-- NEW: Camera Views -->
+      <div class="section">
+        <h3>Camera Views</h3>
+        <div class="button-group">
+          <button id="btn-iso" onclick="setCameraPreset('iso')">Isometric</button>
+          <button id="btn-top" onclick="setCameraPreset('top')">Top-down (Aerial)</button>
+        </div>
+      </div>
+
+      <div id="file-input-section">
+        <input type="file" id="file-input" accept="image/*,.pdf"/>
+        <label for="file-input" class="file-label">📁 Click to upload floor plan (Image or PDF)</label>
+        <div id="file-status" style="margin-top:10px;font-size:11px;color:#666;"></div>
+      </div>
+
+      <div class="mode-toggle">
+        <div class="mode-button active" onclick="setMode('view', this)">View Mode</div>
+        <div class="mode-button" onclick="setMode('edit', this)">Edit Mode</div>
+      </div>
+
+      <div class="section">
+        <h3>Add New Building</h3>
+        <div class="building-config">
+          <div class="config-item"><label>Building Name:</label><input type="text" id="new-building-name" placeholder="e.g., Building A"/></div>
+          <div class="config-item"><label>Total Units:</label><input type="number" id="new-building-units" value="8" min="1" max="200"/></div>
+          <div class="config-item"><label>Columns:</label><input type="number" id="new-building-cols" value="1" min="1" max="20"/></div>
+          <div class="config-item"><label>Rows per Column:</label><input type="number" id="new-building-rows" value="8" min="1" max="40"/></div>
+        </div>
+        <button onclick="addBuilding()">Add Building</button>
+      </div>
+
+      <div class="section">
+        <h3>Import Buildings from Excel/CSV</h3>
+        <input type="file" id="xlsx-input" accept=".xlsx,.xls,.csv"/>
+        <div id="xlsx-status" style="margin-top:8px;font-size:12px;color:#555;"></div>
+        <div class="button-group">
+          <button id="xlsx-config-btn" onclick="openLayoutModal()" disabled>Configure layouts…</button>
+          <button id="xlsx-create-btn" onclick="createFromSheet()" disabled>Create from sheet</button>
+        </div>
+      </div>
+
+      <div class="section" id="selected-building-section" style="display:none;">
+        <h3>Selected Building</h3>
+        <div id="selected-building-info"></div>
+
+        <div class="row-3">
+          <div class="mini"><label for="pos-x">X</label><input type="number" id="pos-x" step="0.1"/></div>
+          <div class="mini"><label for="pos-z">Z</label><input type="number" id="pos-z" step="0.1"/></div>
+          <div class="mini"><label for="rot-y">Rot°</label><input type="number" id="rot-y" step="0.1"/></div>
+        </div>
+
+        <div class="row-3">
+          <div class="mini"><label for="move-step">Move step</label><input type="number" id="move-step" step="0.01" value="0.25" min="0.01"/></div>
+          <div class="mini"><label for="coarse-mult">Coarse ×</label><input type="number" id="coarse-mult" step="0.5" value="4" min="1"/></div>
+          <div class="mini"><label for="rot-step">Rot step°</label><input type="number" id="rot-step" step="0.1" value="1" min="0.1"/></div>
+        </div>
+
+        <div class="position-controls">
+          <button onclick="nudge('x',-1)">← X-</button>
+          <button onclick="nudge('z',-1)">↑ Z-</button>
+          <button onclick="nudge('x', 1)">X+ →</button>
+          <button onclick="nudgeRot(-1)">↺ Rot-</button>
+          <button onclick="nudge('z', 1)">↓ Z+</button>
+          <button onclick="nudgeRot( 1)">↻ Rot+</button>
+        </div>
+
+        <div class="row">
+          <div class="mini"><label for="footprint-scale">Footprint</label><input type="range" id="footprint-scale" min="0.5" max="3" step="0.05" value="1"/></div>
+          <div class="mini"><label for="snap-grid">Snap</label><input type="number" id="snap-grid" step="0.01" value="0.25" min="0.01"/></div>
+        </div>
+
+        <div class="row">
+          <div class="mini"><label for="cube-scale">Cube size</label><input type="range" id="cube-scale" min="0.5" max="2" step="0.05" value="1"/></div>
+          <div class="mini"><label id="cube-scale-readout">×1.00</label><input type="number" id="cube-scale-num" step="0.05" min="0.5" max="2" value="1"/></div>
+        </div>
+
+        <div class="fine-row">
+          <button onclick="applyInputs()">Apply Inputs</button>
+          <button onclick="resetTransform()">Reset Transform</button>
+        </div>
+
+        <button onclick="deleteSelectedBuilding()" style="background:#dc3545;width:100%;margin-top:10px;">Delete Building</button>
+      </div>
+
+      <div class="section">
+        <h3>Building Units</h3>
+        <div id="building-controls"></div>
+      </div>
+
+      <div class="button-group">
+        <button onclick="exportData()">Export Data</button>
+        <button onclick="exportViewerDataset()">Export Viewer Dataset</button>
+        <button onclick="importData()">Import Data</button>
+        <button onclick="saveScene()">Save Scene</button>
+        <button onclick="loadScene()">Load Scene</button>
+        <button onclick="clearAll()">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layout config modal -->
+  <div id="layout-backdrop" class="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="layout-title">
+      <header id="layout-title">Configure building layouts</header>
+      <div class="content">
+        <div style="margin-bottom:8px;font-size:12px;color:#444;">
+          Set <strong>Columns</strong>, <strong>Rows/Col</strong>, and <strong>Fill order</strong> for each building. Coverage must be at least Units.
+        </div>
+        <table class="layout-table" id="layout-table">
+          <thead>
+            <tr>
+              <th>Building</th>
+              <th>Units</th>
+              <th>Columns</th>
+              <th>Rows/Col</th>
+              <th>Coverage</th>
+              <th>Fill order</th>
+              <th>Auto</th>
+            </tr>
+          </thead>
+          <tbody id="layout-tbody"></tbody>
+        </table>
+      </div>
+      <footer>
+        <button onclick="closeLayoutModal()">Cancel</button>
+        <button id="layout-apply-btn" onclick="applyLayoutsAndEnableCreate()">Apply</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Libs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <script>
+    let scene, renderer;
+    let perspCam, orthoCam, camera;   // current camera
+    let orthoSize = 140;              // controls top-down zoom scale
+    let buildings = [];
+    let raycaster, mouse;
+    let selectedBuilding = null;
+    let mode = 'view';
+    let floorPlanMesh = null;
+    let buildingIdCounter = 0;
+
+    // drag-to-move state
+    let isDraggingBuilding = false;
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // y=0
+    const dragIntersect = new THREE.Vector3();
+    const dragOffset = new THREE.Vector3();
+
+    // general drag state
+    let isDragging = false;
+    let lastMouse = { x:0, y:0 };
+    let rightMouse = false;
+
+    // Excel/CSV staging
+    let stagedSheetBuildings = null;
+
+    const ui = {};
+    let sidebarWidth = 430;
+
+    // Global color (all buildings share this)
+    let currentBuildingColorHex = '#4a90e2';
+
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    function hexToThreeNumber(hex){ return parseInt(hex.replace('#',''), 16); }
+    function getCanvasAspect(){ return (window.innerWidth - sidebarWidth) / window.innerHeight; }
+
+    function init(){
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f0);
+
+      // --- Cameras ---
+      // Perspective (Isometric-like)
+      perspCam = new THREE.PerspectiveCamera(75, getCanvasAspect(), 0.1, 2000);
+      perspCam.position.set(80, 80, 80);
+      perspCam.lookAt(0, 0, 0);
+
+      // Orthographic (Top-down)
+      const aspect = getCanvasAspect();
+      orthoCam = new THREE.OrthographicCamera(
+        -orthoSize * aspect, orthoSize * aspect,
+        orthoSize, -orthoSize, -1000, 2000
+      );
+      orthoCam.position.set(0, 300, 0);     // straight overhead
+      orthoCam.up.set(0, 0, -1);            // so increasing X moves right, Z moves down visually
+      orthoCam.lookAt(0, 0, 0);
+
+      camera = perspCam; // default
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true, alpha: false });
+      renderer.setClearColor(0xf0f0f0, 1);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      resizeRenderer();
+
+      // Lights
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir.position.set(50,100,50);
+      scene.add(dir);
+
+      // Ground & grid
+      const groundGeometry = new THREE.PlaneGeometry(200, 200);
+      const groundMaterial = new THREE.MeshLambertMaterial({ color: 0xe0e0e0 });
+      const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+      ground.rotation.x = -Math.PI/2;
+      ground.position.y = -0.5;
+      ground.receiveShadow = true;
+      ground.name = 'ground';
+      scene.add(ground);
+
+      const gridHelper = new THREE.GridHelper(200, 20, 0x888888, 0xcccccc);
+      gridHelper.name = 'grid';
+      scene.add(gridHelper);
+
+      // UI refs
+      bindUI();
+
+      setupControls();
+
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('click', onMouseClick);
+      document.addEventListener('keydown', onKeyDown);
+      document.getElementById('file-input').addEventListener('change', handleFileUpload);
+      ui.xlsxInput.addEventListener('change', handleSheetUpload);
+
+      // cube size listeners
+      ui.cubeScale.addEventListener('input', onCubeScaleChange);
+      ui.cubeScaleNum.addEventListener('change', onCubeScaleNumChange);
+
+      addDefaultBuildings();
+      animate();
+    }
+
+    function bindUI(){
+      ui.selectedSection = document.getElementById('selected-building-section');
+      ui.selectedInfo = document.getElementById('selected-building-info');
+      ui.posX = document.getElementById('pos-x');
+      ui.posZ = document.getElementById('pos-z');
+      ui.rotY = document.getElementById('rot-y');
+      ui.moveStep = document.getElementById('move-step');
+      ui.coarseMult = document.getElementById('coarse-mult');
+      ui.rotStep = document.getElementById('rot-step');
+      ui.footprint = document.getElementById('footprint-scale');
+      ui.snap = document.getElementById('snap-grid');
+      ui.cubeScale = document.getElementById('cube-scale');
+      ui.cubeScaleNum = document.getElementById('cube-scale-num');
+      ui.cubeScaleReadout = document.getElementById('cube-scale-readout');
+
+      ui.xlsxInput = document.getElementById('xlsx-input');
+      ui.xlsxStatus = document.getElementById('xlsx-status');
+      ui.xlsxConfigBtn = document.getElementById('xlsx-config-btn');
+      ui.xlsxCreateBtn = document.getElementById('xlsx-create-btn');
+
+      ui.layoutBackdrop = document.getElementById('layout-backdrop');
+      ui.layoutTbody = document.getElementById('layout-tbody');
+
+      ui.globalColor = document.getElementById('global-color');
+      ui.globalColor.addEventListener('input', ()=>{
+        currentBuildingColorHex = ui.globalColor.value;
+        recolorAllBuildings(currentBuildingColorHex);
+      });
+    }
+
+    function onCubeScaleChange(){
+      if (!selectedBuilding) return;
+      const val = parseFloat(ui.cubeScale.value);
+      selectedBuilding.cubeScale = val;
+      ui.cubeScaleNum.value = val.toFixed(2);
+      ui.cubeScaleReadout.textContent = '×' + val.toFixed(2);
+      buildUnitGeometry(selectedBuilding);
+      recenterLabel(selectedBuilding);
+    }
+    function onCubeScaleNumChange(){
+      if (!selectedBuilding) return;
+      let val = parseFloat(ui.cubeScaleNum.value);
+      if (Number.isNaN(val)) return;
+      val = Math.min(2, Math.max(0.5, val));
+      selectedBuilding.cubeScale = val;
+      ui.cubeScale.value = val;
+      ui.cubeScaleReadout.textContent = '×' + val.toFixed(2);
+      buildUnitGeometry(selectedBuilding);
+      recenterLabel(selectedBuilding);
+    }
+
+    function getCanvasWH(){
+      return { w: Math.max(200, window.innerWidth - sidebarWidth), h: Math.max(200, window.innerHeight) };
+    }
+    function resizeRenderer(){
+      const { w, h } = getCanvasWH();
+      renderer.setSize(w, h, false);
+
+      // Update perspective camera
+      perspCam.aspect = w / h;
+      perspCam.updateProjectionMatrix();
+
+      // Update ortho camera
+      const aspect = w / h;
+      orthoCam.left   = -orthoSize * aspect;
+      orthoCam.right  =  orthoSize * aspect;
+      orthoCam.top    =  orthoSize;
+      orthoCam.bottom = -orthoSize;
+      orthoCam.updateProjectionMatrix();
+    }
+    function onWindowResize(){ resizeRenderer(); }
+
+    function addDefaultBuildings(){
+      createBuilding('Building A', 8, 1, 8, { x:-30, z:-20 });
+      createBuilding('Building B', 8, 2, 4, { x:  0, z:-20 });
+      createBuilding('Building C', 12,3, 4, { x: 30, z:-20 });
+    }
+
+    // ====== CREATION ======
+    function createBuilding(name,totalUnits,columns,rowsPerColumn,position={x:0,z:0}, options={}){
+      const buildingId = buildingIdCounter++;
+      const color = hexToThreeNumber(currentBuildingColorHex);
+
+      const building = {
+        id: buildingId,
+        name: name || `Building ${buildingId+1}`,
+        totalUnits,
+        columns,
+        rowsPerColumn,
+        fillOrder: options.fillOrder || 'col-first',
+        units: options.units || new Array(totalUnits).fill(''),
+        unitKeys: options.unitKeys || new Array(totalUnits).fill(''),
+        group: new THREE.Group(),
+        color,
+        position,
+        rotation: 0,
+        boxes: [],
+        baseBoxSize: 6,
+        baseBoxHeight: 3,
+        cubeScale: options.cubeScale || 1,
+        boxSize: 6,
+        boxHeight: 3,
+        baseSpacing: 1,
+        footprintScale: options.footprintScale || 1
+      };
+
+      buildUnitGeometry(building);
+      centerAndPlace(building, position);
+
+      // Label
+      const labelCanvas = document.createElement('canvas');
+      const ctx = labelCanvas.getContext('2d');
+      labelCanvas.width = 256; labelCanvas.height = 64;
+      ctx.fillStyle = 'white'; ctx.fillRect(0,0,256,64);
+      ctx.fillStyle = 'black'; ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(building.name, 128, 32);
+      const labelTex = new THREE.CanvasTexture(labelCanvas);
+      const labelMat = new THREE.SpriteMaterial({ map: labelTex });
+      const labelSprite = new THREE.Sprite(labelMat);
+      labelSprite.position.set(0, building.rowsPerColumn * (building.boxHeight + 0.5) + 5, 0);
+      labelSprite.scale.set(12,3,1);
+      building.group.add(labelSprite);
+
+      buildings.push(building);
+      scene.add(building.group);
+      updateBuildingControls();
+    }
+
+    function buildUnitGeometry(building){
+      if (building.boxes && building.boxes.length){
+        building.boxes.forEach(mesh => building.group.remove(mesh));
+      }
+      building.boxes = [];
+
+      building.boxSize   = building.baseBoxSize   * building.cubeScale;
+      building.boxHeight = building.baseBoxHeight * building.cubeScale;
+
+      const spacing = building.baseSpacing * building.footprintScale;
+      const { boxSize, boxHeight } = building;
+
+      let addIndex = 0;
+
+      const addCubeAt = (col,row) => {
+        const geom = new THREE.BoxGeometry(boxSize, boxHeight, boxSize);
+        const mat  = new THREE.MeshPhongMaterial({ color: building.color, opacity:0.85, transparent:true });
+        const cube = new THREE.Mesh(geom, mat);
+        cube.position.set(col*(boxSize+spacing), row*(boxHeight+0.5)+boxHeight/2, 0);
+        cube.castShadow = true;
+        cube.receiveShadow = true;
+        cube.userData = { buildingId: building.id, unitIndex: addIndex };
+
+        const edges = new THREE.EdgesGeometry(geom);
+        cube.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x333333 })));
+
+        const c = document.createElement('canvas');
+        const k = c.getContext('2d');
+        c.width = 128; c.height = 128;
+        k.fillStyle = 'white'; k.fillRect(0,0,128,128);
+        k.fillStyle = 'black'; k.font = 'bold 48px Arial'; k.textAlign='center'; k.textBaseline='middle';
+        k.fillText(String(addIndex+1), 64, 64);
+        const numTex = new THREE.CanvasTexture(c);
+        const numMat = new THREE.SpriteMaterial({ map: numTex });
+        const numSprite = new THREE.Sprite(numMat);
+        numSprite.scale.set(2,2,1);
+        numSprite.position.set(0, 0, boxSize/2 + 0.1);
+        cube.add(numSprite);
+
+        building.boxes.push(cube);
+        building.group.add(cube);
+        addIndex++;
+      };
+
+      if (building.fillOrder === 'col-first'){
+        outer: for (let col=0; col<building.columns; col++){
+          for (let row=0; row<building.rowsPerColumn; row++){
+            if (addIndex >= building.totalUnits) break outer;
+            addCubeAt(col,row);
+          }
+        }
+      } else {
+        outer2: for (let row=0; row<building.rowsPerColumn; row++){
+          for (let col=0; col<building.columns; col++){
+            if (addIndex >= building.totalUnits) break outer2;
+            addCubeAt(col,row);
+          }
+        }
+      }
+    }
+
+    function recolorAllBuildings(hex){
+      const colorNum = hexToThreeNumber(hex);
+      buildings.forEach(b=>{
+        b.color = colorNum;
+        b.boxes.forEach(box=>{
+          if (box.material) box.material.color.setHex(colorNum);
+        });
+      });
+      updateBuildingControls();
+    }
+
+    function centerAndPlace(building, position){
+      const bb = new THREE.Box3().setFromObject(building.group);
+      const center = new THREE.Vector3();
+      bb.getCenter(center);
+      building.group.position.set(position.x - center.x/2, 0, position.z - center.z/2);
+    }
+
+    function recenterLabel(building){
+      const label = building.group.children.find(ch => ch.isSprite);
+      if (!label) return;
+      label.position.set(0, building.rowsPerColumn * (building.boxHeight + 0.5) + 5, 0);
+    }
+
+    function updateBuildingControls(){
+      const controlsDiv = document.getElementById('building-controls');
+      controlsDiv.innerHTML = '';
+      buildings.forEach((b) => {
+        const section = document.createElement('div');
+        section.className = 'building-section';
+        const title = document.createElement('div');
+        title.className = 'building-title';
+        title.innerHTML = `
+          <span>
+            <span class="color-indicator" style="background:#${b.color.toString(16).padStart(6,'0')}"></span>
+            ${b.name} (${b.columns}×${b.rowsPerColumn}) <span class="pill">${b.fillOrder}</span>
+          </span>`;
+        section.appendChild(title);
+
+        const unitGrid = document.createElement('div');
+        unitGrid.className = 'unit-grid';
+        unitGrid.style.gridTemplateColumns = `repeat(${b.columns}, 1fr)`;
+
+        for (let unit=0; unit<b.totalUnits; unit++){
+          const unitDiv = document.createElement('div');
+          unitDiv.className = 'unit-input';
+          const label = document.createElement('label');
+          label.textContent = `Unit ${unit+1}:`;
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.placeholder = `Unit ${unit+1}`;
+          input.value = b.units[unit] || '';
+          input.addEventListener('input', (e)=>{
+            b.units[unit] = e.target.value;
+            updateUnitVisual(b.id, unit, e.target.value);
+          });
+          const keySpan = document.createElement('span');
+          keySpan.className = 'key-pill';
+          keySpan.textContent = (b.unitKeys && b.unitKeys[unit]) ? b.unitKeys[unit] : '—';
+
+          unitDiv.appendChild(label);
+          unitDiv.appendChild(input);
+          unitDiv.appendChild(keySpan);
+          unitGrid.appendChild(unitDiv);
+        }
+        section.appendChild(unitGrid);
+        controlsDiv.appendChild(section);
+      });
+    }
+
+    function updateUnitVisual(buildingId, unitIndex, value){
+      const b = buildings.find(x=>x.id===buildingId);
+      if (b && b.boxes[unitIndex]){
+        b.boxes[unitIndex].material.opacity = value ? 1.0 : 0.85;
+      }
+    }
+
+    function setMode(newMode, el){
+      mode = newMode;
+      document.querySelectorAll('.mode-button').forEach(btn=>btn.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.getElementById('current-mode').textContent = newMode.toUpperCase();
+      document.getElementById('edit-info').style.display = (newMode==='edit') ? 'block' : 'none';
+      if (newMode !== 'edit') deselectBuilding();
+    }
+
+    // ===== Camera Presets =====
+    function setCameraPreset(preset){
+      if (preset === 'top'){
+        camera = orthoCam;
+        // center above origin; keep any x/z from current camera to preserve context
+        orthoCam.position.set(perspCam.position.x, 300, perspCam.position.z);
+        orthoCam.lookAt(0, 0, 0);
+        document.getElementById('btn-top').disabled = true;
+        document.getElementById('btn-iso').disabled = false;
+      } else {
+        camera = perspCam;
+        // put back to a nice iso if we were top-down
+        if (perspCam.position.length() < 10){
+          perspCam.position.set(80,80,80);
+        }
+        perspCam.lookAt(0, 0, 0);
+        document.getElementById('btn-top').disabled = false;
+        document.getElementById('btn-iso').disabled = true;
+      }
+    }
+
+    // ===== File Upload (Image or PDF) =====
+    async function handleFileUpload(e){
+      const file = e.target.files[0];
+      if (!file) return;
+      const status = document.getElementById('file-status');
+
+      try{
+        if (file.type === 'application/pdf'){
+          status.textContent = `Rendering PDF: ${file.name}...`;
+          const arrayBuf = await file.arrayBuffer();
+          await renderPdfToTexture(arrayBuf);
+          status.textContent = `Loaded PDF: ${file.name}`;
+        } else if (file.type.startsWith('image/')){
+          const reader = new FileReader();
+          reader.onload = function(ev){
+            const loader = new THREE.TextureLoader();
+            loader.load(ev.target.result, (tex)=> {
+              tex.generateMipmaps = true;
+              tex.minFilter = THREE.LinearMipmapLinearFilter;
+              tex.magFilter = THREE.LinearFilter;
+              if (renderer && renderer.capabilities) {
+                tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+              }
+              tex.needsUpdate = true;
+              createFloorPlanMesh(tex);
+              status.textContent = `Loaded image: ${file.name}`;
+            });
+          };
+          reader.readAsDataURL(file);
+        } else {
+          status.textContent = 'Unsupported file type.';
+        }
+      } catch(err){
+        status.textContent = 'Error loading file: ' + (err && err.message ? err.message : err);
+      }
+    }
+
+    async function renderPdfToTexture(arrayBuffer){
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+
+      const baseViewport = page.getViewport({ scale: 1 });
+      const maxTex = (renderer && renderer.capabilities && renderer.capabilities.maxTextureSize) ? renderer.capabilities.maxTextureSize : 4096;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetLongest = Math.min(4096, maxTex);
+      const longestSide = Math.max(baseViewport.width, baseViewport.height);
+      const scaleByLongest = (targetLongest / longestSide) * dpr;
+      const scale = Math.max(1, Math.min(scaleByLongest, 6));
+
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      if (renderer && renderer.capabilities) {
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      }
+      texture.needsUpdate = true;
+
+      createFloorPlanMesh(texture);
+    }
+
+    function createFloorPlanMesh(texture){
+      if (floorPlanMesh){ scene.remove(floorPlanMesh); }
+      const ground = scene.getObjectByName('ground');
+      if (ground) scene.remove(ground);
+
+      const aspect = texture.image.width / texture.image.height;
+      const size = 200;
+      const geometry = new THREE.PlaneGeometry(size * aspect, size);
+      const material = new THREE.MeshBasicMaterial({
+        map: texture, side: THREE.DoubleSide, transparent: true, opacity: 0.95
+      });
+
+      floorPlanMesh = new THREE.Mesh(geometry, material);
+      floorPlanMesh.rotation.x = -Math.PI/2;
+      floorPlanMesh.position.y = 0;
+      floorPlanMesh.receiveShadow = true;
+      scene.add(floorPlanMesh);
+    }
+
+    // ===== Camera & Mouse + Drag-to-move =====
+    function setupControls(){
+      const dom = renderer.domElement;
+
+      function setMouseFromEvent(ev){
+        const rect = dom.getBoundingClientRect();
+        mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      }
+
+      dom.addEventListener('mousedown', (ev)=>{
+        isDragging = true;
+        rightMouse = ev.button === 2;
+        lastMouse = { x: ev.offsetX, y: ev.offsetY };
+
+        if (!rightMouse && mode === 'edit'){
+          setMouseFromEvent(ev);
+          raycaster.setFromCamera(mouse, camera);
+
+          const all = [];
+          buildings.forEach(b=>all.push(...b.boxes));
+          const hits = raycaster.intersectObjects(all, false);
+
+          if (hits.length > 0){
+            const hit = hits[0].object;
+            const bId = hit.userData.buildingId;
+            selectBuilding(bId);
+
+            const ok = raycaster.ray.intersectPlane(dragPlane, dragIntersect);
+            if (ok && selectedBuilding){
+              dragOffset.set(
+                dragIntersect.x - selectedBuilding.group.position.x,
+                0,
+                dragIntersect.z - selectedBuilding.group.position.z
+              );
+              isDraggingBuilding = true;
+              ev.preventDefault();
+              return;
+            }
+          }
+        }
+      });
+
+      dom.addEventListener('mousemove', (ev)=>{
+        if (!isDragging) return;
+
+        // Edit mode: dragging a building
+        if (isDraggingBuilding && selectedBuilding && mode === 'edit'){
+          setMouseFromEvent(ev);
+          raycaster.setFromCamera(mouse, camera);
+          if (raycaster.ray.intersectPlane(dragPlane, dragIntersect)){
+            const targetX = dragIntersect.x - dragOffset.x;
+            const targetZ = dragIntersect.z - dragOffset.z;
+            const g = Math.max(0.001, parseFloat(document.getElementById('snap-grid').value) || 0.25);
+            selectedBuilding.group.position.x = Math.round(targetX / g) * g;
+            selectedBuilding.group.position.z = Math.round(targetZ / g) * g;
+            if (typeof syncInputs === 'function') syncInputs();
+          }
+          return;
+        }
+
+        const dx = ev.offsetX - lastMouse.x;
+        const dy = ev.offsetY - lastMouse.y;
+
+        if (camera.isOrthographicCamera){
+          // Top-down: drag always pans
+          const panSpeed = 0.5 * (orthoSize / 120);
+          camera.position.x -= dx * panSpeed;
+          camera.position.z += dy * panSpeed; // Y screen down -> Z+
+          camera.updateProjectionMatrix();
+        } else {
+          // Perspective
+          if (rightMouse){
+            // pan
+            camera.position.x -= dx * 0.2;
+            camera.position.z -= dy * 0.2;
+          } else if (mode === 'view'){
+            // rotate
+            const angle = dx * 0.01;
+            const x = camera.position.x;
+            const z = camera.position.z;
+            camera.position.x = x * Math.cos(angle) + z * Math.sin(angle);
+            camera.position.z = -x * Math.sin(angle) + z * Math.cos(angle);
+          }
+        }
+
+        camera.lookAt(0, 15, 0);
+        lastMouse = { x: ev.offsetX, y: ev.offsetY };
+      });
+
+      dom.addEventListener('mouseup', ()=>{
+        isDragging = false;
+        isDraggingBuilding = false;
+      });
+
+      dom.addEventListener('wheel', (ev)=>{
+        if (camera.isOrthographicCamera){
+          // zoom by resizing frustum
+          const scale = ev.deltaY > 0 ? 1.1 : 0.9;
+          orthoSize = Math.max(20, Math.min(800, orthoSize * scale));
+          const { w, h } = getCanvasWH();
+          const aspect = w / h;
+          orthoCam.left   = -orthoSize * aspect;
+          orthoCam.right  =  orthoSize * aspect;
+          orthoCam.top    =  orthoSize;
+          orthoCam.bottom = -orthoSize;
+          orthoCam.updateProjectionMatrix();
+        } else {
+          // perspective zoom
+          const scale = ev.deltaY > 0 ? 1.1 : 0.9;
+          camera.position.multiplyScalar(scale);
+        }
+        camera.lookAt(0, 15, 0);
+      });
+
+      dom.addEventListener('contextmenu', (e)=> e.preventDefault());
+    }
+
+    function onMouseClick(event){
+      if (isDraggingBuilding) return;
+      if (mode !== 'edit') return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left)/rect.width)*2 - 1;
+      mouse.y = -((event.clientY - rect.top)/rect.height)*2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const all = []; buildings.forEach(b=>all.push(...b.boxes));
+      const isects = raycaster.intersectObjects(all);
+      if (isects.length>0){
+        const clicked = isects[0].object;
+        const buildingId = clicked.userData.buildingId;
+        selectBuilding(buildingId);
+      } else {
+        deselectBuilding();
+      }
+    }
+
+    function selectBuilding(id){
+      deselectBuilding();
+      const b = buildings.find(x=>x.id===id);
+      if (!b) return;
+      selectedBuilding = b;
+      b.boxes.forEach(box=>{ box.material.emissive = new THREE.Color(0x444444); });
+
+      const fillLabel = b.fillOrder === 'row-first' ? 'row-first' : 'col-first';
+
+      ui.selectedSection.style.display = 'block';
+      ui.selectedInfo.innerHTML = `
+        <strong>${b.name}</strong><br/>
+        Units: ${b.totalUnits}<br/>
+        Configuration: ${b.columns}×${b.rowsPerColumn} <span class="pill">${fillLabel}</span>
+      `;
+
+      ui.posX.value = b.group.position.x.toFixed(3);
+      ui.posZ.value = b.group.position.z.toFixed(3);
+      ui.rotY.value = THREE.MathUtils.radToDeg(b.group.rotation.y).toFixed(3);
+      ui.footprint.value = b.footprintScale;
+      ui.cubeScale.value = b.cubeScale;
+      ui.cubeScaleNum.value = b.cubeScale.toFixed(2);
+      ui.cubeScaleReadout.textContent = '×' + Number(b.cubeScale).toFixed(2);
+    }
+
+    function deselectBuilding(){
+      if (selectedBuilding){
+        selectedBuilding.boxes.forEach(box=>{ box.material.emissive = new THREE.Color(0x000000); });
+        selectedBuilding = null;
+      }
+      ui.selectedSection.style.display = 'none';
+    }
+
+    // ===== Precision Movement / Rotation =====
+    function getSteps(){
+      const move = Math.max(0.001, parseFloat(ui.moveStep.value) || 0.25);
+      const coarseMult = Math.max(1, parseFloat(ui.coarseMult.value) || 4);
+      const rot = Math.max(0.01, parseFloat(ui.rotStep.value) || 1);
+      return { move, coarseMult, rot };
+    }
+    function nudge(axis, dir){
+      if (!selectedBuilding) return;
+      const { move } = getSteps();
+      const delta = move * dir;
+      if (axis==='x') selectedBuilding.group.position.x = snap(selectedBuilding.group.position.x + delta);
+      if (axis==='z') selectedBuilding.group.position.z = snap(selectedBuilding.group.position.z + delta);
+      syncInputs();
+    }
+    function nudgeRot(dir){
+      if (!selectedBuilding) return;
+      const { rot } = getSteps();
+      selectedBuilding.group.rotation.y += THREE.MathUtils.degToRad(rot * dir);
+      syncInputs();
+    }
+    function snap(val){
+      const g = Math.max(0.001, parseFloat(ui.snap.value) || 0.25);
+      return Math.round(val / g) * g;
+    }
+    function applyInputs(){
+      if (!selectedBuilding) return;
+      const x = parseFloat(ui.posX.value);
+      const z = parseFloat(ui.posZ.value);
+      const deg = parseFloat(ui.rotY.value);
+      if (!Number.isNaN(x)) selectedBuilding.group.position.x = snap(x);
+      if (!Number.isNaN(z)) selectedBuilding.group.position.z = snap(z);
+      if (!Number.isNaN(deg)) selectedBuilding.group.rotation.y = THREE.MathUtils.degToRad(deg);
+
+      const footprint = parseFloat(ui.footprint.value);
+      if (!Number.isNaN(footprint) && footprint>0){
+        selectedBuilding.footprintScale = footprint;
+        rebuildFootprint(selectedBuilding);
+      }
+
+      const cScale = parseFloat(ui.cubeScale.value);
+      if (!Number.isNaN(cScale) && cScale>=0.5 && cScale<=2){
+        selectedBuilding.cubeScale = cScale;
+        buildUnitGeometry(selectedBuilding);
+        recenterLabel(selectedBuilding);
+      }
+      syncInputs();
+    }
+    function resetTransform(){
+      if (!selectedBuilding) return;
+      selectedBuilding.group.position.x = 0;
+      selectedBuilding.group.position.z = 0;
+      selectedBuilding.group.rotation.y = 0;
+      selectedBuilding.footprintScale = 1;
+      selectedBuilding.cubeScale = 1;
+      buildUnitGeometry(selectedBuilding);
+      rebuildFootprint(selectedBuilding);
+      recenterLabel(selectedBuilding);
+      syncInputs();
+    }
+    function syncInputs(){
+      if (!selectedBuilding) return;
+      ui.posX.value = selectedBuilding.group.position.x.toFixed(3);
+      ui.posZ.value = selectedBuilding.group.position.z.toFixed(3);
+      ui.rotY.value = THREE.MathUtils.radToDeg(selectedBuilding.group.rotation.y).toFixed(3);
+      ui.footprint.value = selectedBuilding.footprintScale;
+      ui.cubeScale.value = selectedBuilding.cubeScale;
+      ui.cubeScaleNum.value = selectedBuilding.cubeScale.toFixed(2);
+      ui.cubeScaleReadout.textContent = '×' + Number(selectedBuilding.cubeScale).toFixed(2);
+    }
+    function rebuildFootprint(building){
+      const spacing = building.baseSpacing * building.footprintScale;
+      const { boxSize, boxHeight } = building;
+      let idx = 0;
+      if (building.fillOrder === 'col-first'){
+        for (let col=0; col<building.columns; col++){
+          for (let row=0; row<building.rowsPerColumn; row++){
+            if (idx >= building.totalUnits) break;
+            const cube = building.boxes[idx++];
+            cube.position.set(col*(boxSize+spacing), row*(boxHeight+0.5)+boxHeight/2, 0);
+          }
+        }
+      } else {
+        for (let row=0; row<building.rowsPerColumn; row++){
+          for (let col=0; col<building.columns; col++){
+            if (idx >= building.totalUnits) break;
+            const cube = building.boxes[idx++];
+            cube.position.set(col*(boxSize+spacing), row*(boxHeight+0.5)+boxHeight/2, 0);
+          }
+        }
+      }
+      recenterLabel(building);
+    }
+    function moveBuilding(dx, dz){
+      if (!selectedBuilding) return;
+      const { move } = getSteps();
+      selectedBuilding.group.position.x = snap(selectedBuilding.group.position.x + dx * move * 5);
+      selectedBuilding.group.position.z = snap(selectedBuilding.group.position.z + dz * move * 5);
+      syncInputs();
+    }
+    function rotateBuilding(angleDeg){
+      if (!selectedBuilding) return;
+      selectedBuilding.group.rotation.y += THREE.MathUtils.degToRad(angleDeg);
+      syncInputs();
+    }
+    function deleteSelectedBuilding(){
+      if (!selectedBuilding) return;
+      if (confirm(`Delete ${selectedBuilding.name}?`)){
+        scene.remove(selectedBuilding.group);
+        buildings = buildings.filter(b=>b.id!==selectedBuilding.id);
+        deselectBuilding();
+        updateBuildingControls();
+      }
+    }
+    function onKeyDown(e){
+      // Quick toggle camera
+      if (e.key === 't' || e.key === 'T'){
+        setCameraPreset(camera.isOrthographicCamera ? 'iso' : 'top');
+      }
+
+      if (mode !== 'edit' || !selectedBuilding) return;
+      const { move, coarseMult, rot } = getSteps();
+      const step = e.shiftKey ? move*coarseMult : move;
+      const rstep = e.shiftKey ? rot*coarseMult : rot;
+      switch(e.key){
+        case 'ArrowLeft': selectedBuilding.group.position.x = snap(selectedBuilding.group.position.x - step); syncInputs(); break;
+        case 'ArrowRight':selectedBuilding.group.position.x = snap(selectedBuilding.group.position.x + step); syncInputs(); break;
+        case 'ArrowUp':   selectedBuilding.group.position.z = snap(selectedBuilding.group.position.z - step); syncInputs(); break;
+        case 'ArrowDown': selectedBuilding.group.position.z = snap(selectedBuilding.group.position.z + step); syncInputs(); break;
+        case 'r': case 'R': selectedBuilding.group.rotation.y += THREE.MathUtils.degToRad(rstep); syncInputs(); break;
+        case 'Delete': deleteSelectedBuilding(); break;
+      }
+    }
+
+    // ===== Excel/CSV Import =====
+    async function handleSheetUpload(e){
+      const file = e.target.files[0];
+      if (!file){ ui.xlsxStatus.textContent = 'No file selected.'; ui.xlsxConfigBtn.disabled = true; ui.xlsxCreateBtn.disabled = true; return; }
+      ui.xlsxStatus.textContent = `Reading ${file.name}...`;
+
+      try{
+        const data = await file.arrayBuffer();
+        const wb = XLSX.read(data, { type:'array' });
+        const firstSheet = wb.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { defval: '' });
+
+        if (!rows.length) { ui.xlsxStatus.textContent = 'Sheet is empty.'; ui.xlsxConfigBtn.disabled = true; ui.xlsxCreateBtn.disabled = true; return; }
+
+        const H = Object.keys(rows[0]).reduce((acc,k)=>{ acc[k.toLowerCase().trim()] = k; return acc; }, {});
+        const getCol = (...names)=> { for (const n of names){ const key = n.toLowerCase(); if (H[key]) return H[key]; } return null; };
+
+        const colBuilding = getCol('building','building_name','bldg','tower');
+        const colUnit     = getCol('unit','unitname','label','unit_label','name');
+        const colKey      = getCol('key','unitkey','uid','unique_key','uniqueid');
+        const colCols     = getCol('cols','columns');
+        const colRows     = getCol('rows','rowspercolumn','rows_per_column');
+        const colOrder    = getCol('fillorder','order','fill_order');
+
+        if (!colBuilding){ ui.xlsxStatus.textContent = 'Missing "Building" column.'; ui.xlsxConfigBtn.disabled = true; ui.xlsxCreateBtn.disabled = true; return; }
+        if (!colUnit && !colKey){ ui.xlsxStatus.textContent = 'Need at least a "Unit" or a "Key" column.'; ui.xlsxConfigBtn.disabled = true; ui.xlsxCreateBtn.disabled = true; return; }
+
+        const groups = {};
+        rows.forEach(r=>{
+          const bname = String(r[colBuilding]).trim() || 'Unnamed';
+          if (!groups[bname]) groups[bname] = [];
+          groups[bname].push(r);
+        });
+
+        stagedSheetBuildings = Object.entries(groups).map(([bname, list])=>{
+          const total = list.length;
+          let cols = 0, rowsPC = 0, order = 'col-first';
+
+          if (colCols && Number(list[0][colCols])) cols = Math.max(1, parseInt(list[0][colCols]));
+          if (colRows && Number(list[0][colRows])) rowsPC = Math.max(1, parseInt(list[0][colRows]));
+          if (colOrder && String(list[0][colOrder]).trim().toLowerCase() === 'row-first') order = 'row-first';
+
+          if (!cols || !rowsPC){
+            cols = Math.ceil(Math.sqrt(total));
+            rowsPC = Math.ceil(total / cols);
+          }
+
+          const units = [];
+          const unitKeys = [];
+          list.forEach((r,i)=>{
+            const label = colUnit ? String(r[colUnit]).trim() : '';
+            const key   = colKey ? String(r[colKey]).trim() : '';
+            units.push(label || `Unit ${i+1}`);
+            unitKeys.push(key || '');
+          });
+
+          return { name:bname, totalUnits:total, columns:cols, rowsPerColumn:rowsPC, units, unitKeys, fillOrder: order };
+        });
+
+        // Ask for standard layout (Yes) or personalized (No)
+        const useStandard = confirm('Use a standard layout for ALL buildings (e.g., 2x3, 2x4, 4x4, 8x8)?\n\nOK = Yes, I will enter one layout for all.\nCancel = No, I’ll personalize per building.');
+        if (useStandard){
+          let layout = prompt('Enter layout as CxR (Columns x RowsPerColumn), e.g., 2x3, 4x4, 8x8:', '2x4');
+          if (!layout) layout = '2x4';
+          const m = layout.toLowerCase().replace(/\s+/g,'').match(/^(\d+)\s*[x×]\s*(\d+)$/);
+          if (!m){ alert('Could not parse layout. Using 2x4.'); }
+          const defCols = m ? Math.max(1, parseInt(m[1])) : 2;
+          let defRows = m ? Math.max(1, parseInt(m[2])) : 4;
+
+          const rowFirst = confirm('Fill order: OK = row-first, Cancel = column-first');
+          const defOrder = rowFirst ? 'row-first' : 'col-first';
+
+          stagedSheetBuildings = stagedSheetBuildings.map(b=>{
+            let cols = defCols;
+            let rowsPC = defRows;
+            if (cols * rowsPC < b.totalUnits){
+              rowsPC = Math.ceil(b.totalUnits / cols);
+            }
+            return { ...b, columns: cols, rowsPerColumn: rowsPC, fillOrder: defOrder };
+          });
+
+          ui.xlsxStatus.textContent = `Applied standard layout ${defCols}x${defRows} (${defOrder}) to ${stagedSheetBuildings.length} building(s). Click "Create from sheet".`;
+          ui.xlsxCreateBtn.disabled = false;
+          ui.xlsxConfigBtn.disabled = true;
+        } else {
+          ui.xlsxStatus.textContent = `Parsed ${stagedSheetBuildings.length} building(s). Click "Configure layouts…" to personalize.`;
+          ui.xlsxConfigBtn.disabled = false;
+          ui.xlsxCreateBtn.disabled = true;
+        }
+
+      } catch(err){
+        ui.xlsxStatus.textContent = 'Error reading file: ' + (err && err.message ? err.message : err);
+        ui.xlsxConfigBtn.disabled = true; ui.xlsxCreateBtn.disabled = true;
+      }
+    }
+
+    // ===== Layout modal (personalized route) =====
+    function openLayoutModal(){
+      if (!stagedSheetBuildings || !stagedSheetBuildings.length){ return; }
+      ui.layoutTbody.innerHTML = '';
+
+      stagedSheetBuildings.forEach((b, idx)=>{
+        const tr = document.createElement('tr');
+
+        const tdName = document.createElement('td'); tdName.textContent = b.name;
+        const tdUnits = document.createElement('td'); tdUnits.innerHTML = `<span class="pill">${b.totalUnits} units</span>`;
+
+        const tdCols = document.createElement('td');
+        const inCols = document.createElement('input');
+        inCols.type = 'number'; inCols.min = '1'; inCols.step = '1'; inCols.value = b.columns; inCols.style.width = '90px';
+        tdCols.appendChild(inCols);
+
+        const tdRows = document.createElement('td');
+        const inRows = document.createElement('input');
+        inRows.type = 'number'; inRows.min = '1'; inRows.step = '1'; inRows.value = b.rowsPerColumn; inRows.style.width = '110px';
+        tdRows.appendChild(inRows);
+
+        const tdCov = document.createElement('td');
+        const cov = document.createElement('span'); tdCov.appendChild(cov);
+
+        const tdOrder = document.createElement('td');
+        const sel = document.createElement('select');
+        sel.innerHTML = `<option value="col-first">column-first</option><option value="row-first">row-first</option>`;
+        sel.value = b.fillOrder || 'col-first';
+        tdOrder.appendChild(sel);
+
+        const tdAuto = document.createElement('td');
+        const autoBtn = document.createElement('button');
+        autoBtn.textContent = 'Auto';
+        autoBtn.onclick = ()=>{
+          const cols = Math.ceil(Math.sqrt(b.totalUnits));
+          const rows = Math.ceil(b.totalUnits / cols);
+          inCols.value = cols; inRows.value = rows;
+          updateCoverage();
+        };
+        tdAuto.appendChild(autoBtn);
+
+        function updateCoverage(){
+          const c = Math.max(1, parseInt(inCols.value || '1'));
+          const r = Math.max(1, parseInt(inRows.value || '1'));
+          const coverage = c * r;
+          cov.textContent = `${coverage} slots`;
+          cov.className = coverage >= b.totalUnits ? 'coverage-ok' : 'coverage-bad';
+        }
+
+        inCols.addEventListener('input', updateCoverage);
+        inRows.addEventListener('input', updateCoverage);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdUnits);
+        tr.appendChild(tdCols);
+        tr.appendChild(tdRows);
+        tr.appendChild(tdCov);
+        tr.appendChild(tdOrder);
+        tr.appendChild(tdAuto);
+
+        tr.dataset.index = idx;
+        tr._inCols = inCols;
+        tr._inRows = inRows;
+        tr._selOrder = sel;
+        ui.layoutTbody.appendChild(tr);
+
+        updateCoverage();
+      });
+
+      ui.layoutBackdrop.style.display = 'flex';
+    }
+
+    function closeLayoutModal(){ ui.layoutBackdrop.style.display = 'none'; }
+
+    function applyLayoutsAndEnableCreate(){
+      const rows = Array.from(ui.layoutTbody.querySelectorAll('tr'));
+      for (const tr of rows){
+        const i = parseInt(tr.dataset.index);
+        const b = stagedSheetBuildings[i];
+        const cols = Math.max(1, parseInt(tr._inCols.value || '1'));
+        const rpcs = Math.max(1, parseInt(tr._inRows.value || '1'));
+        const coverage = cols * rpcs;
+        if (coverage < b.totalUnits){
+          alert(`"${b.name}" coverage (${coverage}) is less than its units (${b.totalUnits}). Increase columns/rows.`);
+          return;
+        }
+      }
+      for (const tr of rows){
+        const i = parseInt(tr.dataset.index);
+        const b = stagedSheetBuildings[i];
+        b.columns = Math.max(1, parseInt(tr._inCols.value || '1'));
+        b.rowsPerColumn = Math.max(1, parseInt(tr._inRows.value || '1'));
+        b.fillOrder = tr._selOrder.value;
+      }
+      closeLayoutModal();
+      ui.xlsxStatus.textContent = 'Layouts applied. Click "Create from sheet" to add buildings, then switch to Edit Mode to place them.';
+      ui.xlsxCreateBtn.disabled = false;
+    }
+
+    function createFromSheet(){
+      if (!stagedSheetBuildings || !stagedSheetBuildings.length){ ui.xlsxStatus.textContent = 'Nothing staged.'; return; }
+      const startX = -Math.min(0, (stagedSheetBuildings.length-1)) * 20;
+      stagedSheetBuildings.forEach((sb, i)=>{
+        const pos = { x: startX + i*20, z: -10 };
+        createBuilding(sb.name, sb.totalUnits, sb.columns, sb.rowsPerColumn, pos, {
+          units: sb.units, unitKeys: sb.unitKeys, fillOrder: sb.fillOrder
+        });
+        const b = buildings[buildings.length-1];
+        b.units.forEach((u, idx)=>{ if (u) updateUnitVisual(b.id, idx, u); });
+      });
+
+      ui.xlsxStatus.textContent = `Created ${stagedSheetBuildings.length} building(s). Switch to Edit Mode to position them.`;
+      ui.xlsxCreateBtn.disabled = true;
+      ui.xlsxConfigBtn.disabled = true;
+      stagedSheetBuildings = null;
+    }
+
+    // ===== Export / Import / Save / Load / Clear =====
+    function exportData(){
+      const data = {
+        buildings: buildings.map(b=>({
+          name:b.name, units:b.units, unitKeys:b.unitKeys,
+          totalUnits:b.totalUnits, columns:b.columns, rowsPerColumn:b.rowsPerColumn, fillOrder:b.fillOrder,
+          position:{ x:b.group.position.x, y:b.group.position.y, z:b.group.position.z },
+          rotation:b.group.rotation.y, footprintScale:b.footprintScale, cubeScale:b.cubeScale
+        }))
+      };
+      const blob = new Blob([JSON.stringify(data,null,2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='building_unit_assignments.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportViewerDataset(){
+      const dataset = {
+        version: 2,
+        buildings: buildings.map(b=>({
+          name: b.name,
+          layout: { columns: b.columns, rowsPerColumn: b.rowsPerColumn, fillOrder: b.fillOrder },
+          transform: {
+            position: { x: b.group.position.x, y: b.group.position.y, z: b.group.position.z },
+            rotationY: b.group.rotation.y,
+            footprintScale: b.footprintScale,
+            cubeScale: b.cubeScale
+          },
+          units: b.units.map((label, i)=>({
+            index: i+1,
+            label: label || `Unit ${i+1}`,
+            key: (b.unitKeys && b.unitKeys[i]) ? b.unitKeys[i] : ''
+          }))
+        }))
+      };
+      const blob = new Blob([JSON.stringify(dataset,null,2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='viewer_dataset.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importData(){
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = '.json';
+      input.onchange = (e)=>{
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (ev)=>{
+          try{
+            const data = JSON.parse(ev.target.result);
+            buildings.forEach(b=>scene.remove(b.group));
+            buildings = []; buildingIdCounter = 0;
+
+            data.buildings.forEach(d=>{
+              createBuilding(d.name, d.totalUnits, d.columns, d.rowsPerColumn, d.position || {x:0,z:0}, {
+                units: d.units || new Array(d.totalUnits).fill(''),
+                unitKeys: d.unitKeys || new Array(d.totalUnits).fill(''),
+                cubeScale: d.cubeScale || 1,
+                footprintScale: d.footprintScale || 1,
+                fillOrder: d.fillOrder || 'col-first'
+              });
+              const b = buildings[buildings.length-1];
+              b.group.rotation.y = d.rotation || 0;
+              buildUnitGeometry(b);
+              rebuildFootprint(b);
+              recenterLabel(b);
+              b.units.forEach((u,i)=>{ if (u) updateUnitVisual(b.id, i, u); });
+            });
+            recolorAllBuildings(currentBuildingColorHex);
+            updateBuildingControls();
+            alert('Data imported successfully!');
+          } catch(err){
+            alert('Error importing data: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    function saveScene(){
+      const sceneData = {
+        buildings: buildings.map(b=>({
+          name:b.name, units:b.units, unitKeys:b.unitKeys, totalUnits:b.totalUnits,
+          columns:b.columns, rowsPerColumn:b.rowsPerColumn, fillOrder:b.fillOrder,
+          position:{ x:b.group.position.x, y:b.group.position.y, z:b.group.position.z },
+          rotation:b.group.rotation.y, color:b.color,
+          footprintScale:b.footprintScale, cubeScale:b.cubeScale
+        })),
+        camera:{
+          type: camera.isOrthographicCamera ? 'ortho' : 'persp',
+          position:{ x:camera.position.x, y:camera.position.y, z:camera.position.z },
+          orthoSize
+        },
+        globalColor: currentBuildingColorHex
+      };
+      const blob = new Blob([JSON.stringify(sceneData,null,2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='floor_plan_scene.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function loadScene(){
+      const input = document.createElement('input');
+      input.type='file'; input.accept='.json';
+      input.onchange = (e)=>{
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (ev)=>{
+          try{
+            const sceneData = JSON.parse(ev.target.result);
+            buildings.forEach(b=>scene.remove(b.group));
+            buildings = []; buildingIdCounter = 0;
+
+            if (sceneData.globalColor){
+              currentBuildingColorHex = sceneData.globalColor;
+              document.getElementById('global-color').value = currentBuildingColorHex;
+            }
+
+            sceneData.buildings.forEach(d=>{
+              createBuilding(d.name, d.totalUnits, d.columns, d.rowsPerColumn, d.position || {x:0,z:0}, {
+                units: d.units || new Array(d.totalUnits).fill(''),
+                unitKeys: d.unitKeys || new Array(d.totalUnits).fill(''),
+                cubeScale: d.cubeScale || 1,
+                footprintScale: d.footprintScale || 1,
+                fillOrder: d.fillOrder || 'col-first'
+              });
+              const b = buildings[buildings.length-1];
+              b.group.rotation.y = d.rotation || 0;
+              buildUnitGeometry(b);
+              rebuildFootprint(b);
+              recenterLabel(b);
+              b.units.forEach((u,i)=>{ if (u) updateUnitVisual(b.id, i, u); });
+            });
+
+            recolorAllBuildings(currentBuildingColorHex);
+
+            // restore camera
+            if (sceneData.camera){
+              const c = sceneData.camera;
+              if (c.type === 'ortho'){
+                orthoSize = c.orthoSize || orthoSize;
+                setCameraPreset('top');
+                const { w, h } = getCanvasWH();
+                const aspect = w / h;
+                orthoCam.left   = -orthoSize * aspect;
+                orthoCam.right  =  orthoSize * aspect;
+                orthoCam.top    =  orthoSize;
+                orthoCam.bottom = -orthoSize;
+                orthoCam.updateProjectionMatrix();
+                orthoCam.position.set(c.position.x, c.position.y, c.position.z);
+                orthoCam.lookAt(0,0,0);
+              } else {
+                setCameraPreset('iso');
+                perspCam.position.set(c.position.x, c.position.y, c.position.z);
+                perspCam.lookAt(0,0,0);
+              }
+            } else {
+              setCameraPreset('iso');
+            }
+
+            updateBuildingControls();
+            alert('Scene loaded successfully!');
+          } catch(err){
+            alert('Error loading scene: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    function clearAll(){
+      if (confirm('Clear all buildings and assignments? This cannot be undone.')){
+        buildings.forEach(b=>scene.remove(b.group));
+        buildings = []; buildingIdCounter = 0;
+        updateBuildingControls();
+        deselectBuilding();
+      }
+    }
+
+    // Manual add
+    function addBuilding(){
+      const name = document.getElementById('new-building-name').value;
+      const units = parseInt(document.getElementById('new-building-units').value);
+      const cols = parseInt(document.getElementById('new-building-cols').value);
+      const rows = parseInt(document.getElementById('new-building-rows').value);
+
+      if (!name || !units || !cols || !rows){ alert('Please fill in all building configuration fields'); return; }
+      if (cols * rows < units){ alert('Columns × Rows must be ≥ Total Units'); return; }
+
+      const position = { x:(Math.random()-0.5)*50, z:(Math.random()-0.5)*50 };
+      createBuilding(name, units, cols, rows, position);
+
+      document.getElementById('new-building-name').value = '';
+      document.getElementById('new-building-units').value = '8';
+      document.getElementById('new-building-cols').value = '1';
+      document.getElementById('new-building-rows').value = '8';
+    }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      if (mode==='view' && !camera.isOrthographicCamera){
+        buildings.forEach((b,i)=>{ b.group.position.y = Math.sin(Date.now()*0.001 + i*0.5)*0.5; });
+      } else {
+        buildings.forEach(b=>{ b.group.position.y = 0; });
+      }
+      renderer.render(scene, camera);
+    }
+
+    // Boot
+    init();
+    // default buttons state
+    document.getElementById('btn-iso').disabled = true;
+  </script>
+</body>
+</html>
